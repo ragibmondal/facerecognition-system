@@ -36,7 +36,59 @@ if not os.path.exists(attendance_file):
 face_detector = cv2.CascadeClassifier(FACE_CASCADE_PATH)
 
 # Helper functions
-# ... (same as before)
+def total_registered_users():
+   return len(os.listdir(faces_dir))
+
+def extract_faces(img):
+   gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+   face_points = face_detector.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=5, minSize=(20, 20))
+   return face_points
+
+def identify_face(face_array):
+   model = joblib.load(os.path.join(static_dir, 'face_recognition_model.pkl'))
+   return model.predict(face_array)
+
+def train_model():
+   faces = []
+   labels = []
+   user_list = os.listdir(faces_dir)
+   for user in user_list:
+       user_dir = os.path.join(faces_dir, user)
+       for image_file in os.listdir(user_dir):
+           img = cv2.imread(os.path.join(user_dir, image_file))
+           resized_face = cv2.resize(img, (50, 50))
+           faces.append(resized_face.ravel())
+           labels.append(user)
+   faces = np.array(faces)
+   knn = KNeighborsClassifier(n_neighbors=5)
+   knn.fit(faces, labels)
+   joblib.dump(knn, os.path.join(static_dir, 'face_recognition_model.pkl'))
+
+def extract_attendance():
+   df = pd.read_csv(attendance_file)
+   names = df['Name']
+   rolls = df['Roll']
+   times = df['Time']
+   return names, rolls, times, len(df)
+
+def add_attendance(name):
+   username, user_id = name.split('_')
+   current_time = datetime.now().strftime("%H:%M:%S")
+
+   df = pd.read_csv(attendance_file)
+   if int(user_id) not in list(df['Roll']):
+       with open(attendance_file, 'a') as f:
+           f.write(f'\n{username},{user_id},{current_time}')
+
+def get_all_users():
+   user_list = os.listdir(faces_dir)
+   names = []
+   rolls = []
+   for user in user_list:
+       name, roll = user.split('_')
+       names.append(name)
+       rolls.append(roll)
+   return user_list, names, rolls, len(user_list)
 
 # Flask routes
 @app.route('/')
